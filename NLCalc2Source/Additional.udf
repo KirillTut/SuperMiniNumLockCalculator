@@ -1,0 +1,24 @@
+﻿MTrd(Dn;Sst;L)=(Dn^2-(Dn-2*Sst)^2)*Pi/4*L*Pst // Engineering function MTrd
+MTrp(Vv;Hv;Sst;L)=((Vv+2*Sst)*(Hv+2*Sst)-Vv*Hv)*L*Pst // Engineering function MTrp
+FImm(Ft;In)=(Ft*304.8+In*25.4) // Engineering function FImm
+Sizg(Fc;Lup;Hup;Vup)=100*Fc*Lup/Nup/(Hup*(Vup^2/6)) // Engineering function Sizg
+Wz(Hup;Vup)=(Hup*Vup^2/6)/1000 // Engineering function Wz
+Wzb(Hn;Hv;Vn;Vv)=(Hn*Vn^3-Hv*Vv^3)/6/Hn/1000 // Engineering function Wzb
+Ssvizg(Fc;Hup;K;Lshv;Nshv)=600*Fc*Hup/.7/K/(Lshv^2)/Nshv // Engineering function Ssvizg
+Tsr(Fc;K;Lshv;Nshv)=100*Fc/.7/K/Lshv/Nshv // Engineering function Tsr
+Ssum(Fc;Hup;K;Lshv;Nshv)=sqrt((600*Fc*Hup/.7/K/(Lshv^2)/Nshv)^2+(100*Fc/.7/K/Lshv/Nshv)^2) // Engineering function Ssum
+Skr(D)=pi*D^2/4/100 // Engineering function Skr
+Spr(H;V)=H*V/100 // Engineering function Spr
+Sbal(Hn;Hv;Vn;Vv)=(Hn*Vn-Hv*Vv)/100 // Engineering function Sbal
+S6(A)=3/2*A^2*sqrt(3)/100 // Engineering function S6
+Ssek(Rk;n)=pi*Rk^2*n/360/100 // Engineering function Ssek
+Sring(Rk;r)=pi*(Rk^2-r^2)/100 // Engineering function Sring
+Str(Dk;Hk)=pi*(Dk^2-(Dk-Hk)^2)/400 // Engineering function Str
+Sbolt(Db;Sbol)=(Db-Sbol/2*tan(60))^2*pi/400 // Engineering function Sbolt
+P(N)=Fact(N) // User function P
+Amn(N;M)=Fact(N)/(Fact(N-M)) // User function Amn
+Cmn(N;M)=Fact(N)/(Fact(N-M))/Fact(M) // User function Cmn
+Func1=if(CellIsEmpty(99);m99:=1;NULL) // Helper function Func1
+Func2(X)=if(String(X)="";(M99-1)*100;M99:=X/100+1) // Helper function Func2
+Func3(X)=if(not CellIsEmpty(99);X*(M99-1);NULL) // Helper function Func3
+Func4(X)=X // Helper function Func4

@@ -1,0 +1,27 @@
+# Build output
+bin/
+obj/
+**/bin/
+**/obj/
+
+# Local runtime/publish output
+NLCalc2Runtime/
+Releases/
+
+# User/local settings
+*.user
+*.suo
+.vs/
+nlcalc.ini
+
+# Legacy/original binaries kept locally for reference only
+num_lock_calc_origin/
+num_lock_calc.zip
+issues.txt
+
+# OS/editor noise
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
