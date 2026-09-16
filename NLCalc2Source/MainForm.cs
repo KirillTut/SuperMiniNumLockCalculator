@@ -12,6 +12,11 @@ internal sealed class MainForm : Form
     private readonly List<string> _history = new();
     private bool   _hasResult   = false;
     private string _lastResult  = "";
+    private bool   _preferResultContinuation = false;
+    private int    _savedSelectionStart = 0;
+    private int    _savedSelectionLength = 0;
+    private bool   _hasSavedSelection = false;
+    private int    _inputPointerVersion = 0;
     private bool   _suppress    = false;   // suppress SelectedIndexChanged side-effects
     private bool   _initialHide;
 
@@ -138,6 +143,8 @@ internal sealed class MainForm : Form
         _cbInput.MouseDown           += CbInput_MouseDown;
         _cbInput.SelectedIndexChanged += CbInput_SelectedIndexChanged;
         Controls.Add(_cbInput);
+        Deactivate += MainForm_Deactivate;
+        Activated  += MainForm_Activated;
 
         int cbH = _cbInput.Height;  // auto-sized from font
 
@@ -241,6 +248,17 @@ internal sealed class MainForm : Form
             e.SuppressKeyPress = true;
             ClearInput();
         }
+        else if (_hasResult && IsExpressionEditKey(e))
+        {
+            // Backspace/Delete and clipboard edits do not necessarily produce a
+            // printable KeyPress event, so enter expression-edit mode here.
+            BeginEditingDisplayedExpression();
+        }
+        else if (_hasResult && IsExpressionNavigationKey(e))
+        {
+            // Moving the caret is an explicit request to edit the expression.
+            _preferResultContinuation = false;
+        }
     }
 
     // Operator continuation: typing +/-/*/etc after a result prepends the result.
@@ -249,7 +267,24 @@ internal sealed class MainForm : Form
     {
         if (!_hasResult || e.KeyChar < ' ') return;
 
+        if (!_preferResultContinuation &&
+            TryGetExpressionSelection(out var expr, out var selectionStart,
+                                      out var selectionLength))
+        {
+            // The caret is in the expression, so this is an edit rather than a
+            // request to continue from (or replace) the calculated result.
+            var edited = expr.Remove(selectionStart, selectionLength)
+                             .Insert(selectionStart, e.KeyChar.ToString());
+            _hasResult = false;
+            _lastResult = "";
+            _preferResultContinuation = false;
+            e.Handled = true;
+            SetText(edited, selectionStart + 1);
+            return;
+        }
+
         _hasResult = false;  // consumed — do this first
+        _preferResultContinuation = false;
 
         if (e.KeyChar is '+' or '-' or '*' or '/' or '%' or '^')
         {
@@ -265,14 +300,79 @@ internal sealed class MainForm : Form
         }
     }
 
-    // Clicking the input when a result is shown clears it for new entry.
+    private static bool IsExpressionEditKey(KeyEventArgs e) =>
+        e.KeyCode is Keys.Back or Keys.Delete ||
+        (e.Control && (e.KeyCode == Keys.X || e.KeyCode == Keys.V)) ||
+        (e.Shift && e.KeyCode == Keys.Insert);
+
+    private static bool IsExpressionNavigationKey(KeyEventArgs e) =>
+        e.KeyCode is Keys.Left or Keys.Right or Keys.Home or Keys.End;
+
+    private bool BeginEditingDisplayedExpression()
+    {
+        if (!TryGetExpressionSelection(out var expr, out var selectionStart,
+                                       out var selectionLength))
+            return false;
+
+        _hasResult = false;
+        _lastResult = "";
+        _preferResultContinuation = false;
+        SetText(expr, selectionStart, selectionLength);
+        return true;
+    }
+
+    private bool TryGetExpressionSelection(out string expr, out int selectionStart,
+                                           out int selectionLength)
+    {
+        var text  = _cbInput.Text;
+        var eqIdx = text.LastIndexOf(" = ");
+        if (!_hasResult || eqIdx < 0 || _cbInput.SelectionStart > eqIdx)
+        {
+            expr = "";
+            selectionStart = 0;
+            selectionLength = 0;
+            return false;
+        }
+
+        expr = text[..eqIdx].TrimEnd();
+        selectionStart = Math.Min(_cbInput.SelectionStart, expr.Length);
+        selectionLength = Math.Min(_cbInput.SelectionLength,
+                                   expr.Length - selectionStart);
+        return true;
+    }
+
+    // A click changes only the caret/selection. The result remains available for
+    // copying and is removed later only if the expression is actually edited.
     private void CbInput_MouseDown(object? sender, MouseEventArgs e)
     {
-        if (_hasResult)
+        if (e.Button == MouseButtons.Left)
+            _inputPointerVersion++;
+    }
+
+    private void MainForm_Deactivate(object? sender, EventArgs e)
+    {
+        _savedSelectionStart = _cbInput.SelectionStart;
+        _savedSelectionLength = _cbInput.SelectionLength;
+        _hasSavedSelection = true;
+    }
+
+    private void MainForm_Activated(object? sender, EventArgs e)
+    {
+        if (!_hasSavedSelection) return;
+
+        var pointerVersion = _inputPointerVersion;
+        BeginInvoke(() =>
         {
-            _hasResult = false;
-            SetText("");
-        }
+            if (IsDisposed || !_cbInput.Focused ||
+                Control.MouseButtons != MouseButtons.None ||
+                pointerVersion != _inputPointerVersion)
+                return;
+
+            var start = Math.Clamp(_savedSelectionStart, 0, _cbInput.Text.Length);
+            _cbInput.SelectionStart = start;
+            _cbInput.SelectionLength = Math.Clamp(
+                _savedSelectionLength, 0, _cbInput.Text.Length - start);
+        });
     }
 
     // Selecting a history result keeps result-continuation behavior.
@@ -287,11 +387,13 @@ internal sealed class MainForm : Form
             _lastResult = item[(eqIdx + 3)..].Trim();
             _hasResult = _lastResult.Length > 0;
             SetText(item);
+            if (_hasResult) PreferResultContinuation();
         }
         else
         {
             _hasResult = false;
             _lastResult = "";
+            _preferResultContinuation = false;
             SetText(item);
         }
     }
@@ -312,30 +414,62 @@ internal sealed class MainForm : Form
             var display = $"{expr} = {result}";
             AddToHistory(display);
             SetText(display);
+            PreferResultContinuation();
         }
         catch (Exception ex)
         {
             _hasResult = false;
+            _preferResultContinuation = false;
             SetText(ex.Message);
         }
     }
 
     // Set ComboBox text without triggering our SelectedIndexChanged logic.
-    private void SetText(string text)
+    private void SetText(string text, int? selectionStart = null, int selectionLength = 0)
     {
         _suppress = true;
         try
         {
-            _cbInput.Text           = text;
-            _cbInput.SelectionStart = text.Length;
+            var start = Math.Clamp(selectionStart ?? text.Length, 0, text.Length);
+            _cbInput.Text            = text;
+            _cbInput.SelectionStart  = start;
+            _cbInput.SelectionLength = Math.Clamp(selectionLength, 0, text.Length - start);
         }
         finally { _suppress = false; }
+    }
+
+    private void PreferResultContinuation()
+    {
+        _preferResultContinuation = true;
+        MoveCaretToEnd();
+
+        // ComboBox activation/history selection can overwrite SelectionStart
+        // after the current event. Normalize it once that native event finishes,
+        // then let later deliberate caret placement select expression editing.
+        BeginInvoke(() =>
+        {
+            if (IsDisposed || !_hasResult)
+            {
+                _preferResultContinuation = false;
+                return;
+            }
+
+            MoveCaretToEnd();
+            _preferResultContinuation = false;
+        });
+    }
+
+    private void MoveCaretToEnd()
+    {
+        _cbInput.SelectionStart = _cbInput.Text.Length;
+        _cbInput.SelectionLength = 0;
     }
 
     private void ClearInput()
     {
         _hasResult  = false;
         _lastResult = "";
+        _preferResultContinuation = false;
         SetText("");
     }
 
@@ -498,6 +632,8 @@ internal sealed class MainForm : Form
         ActiveControl = _cbInput;
         _cbInput.Select();
         _cbInput.Focus();
+        if (_hasResult)
+            PreferResultContinuation();
         if (_s.KeepNumLockOn) ScheduleNumLockRestore();
     }
 
