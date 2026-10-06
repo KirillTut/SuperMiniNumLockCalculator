@@ -1,6 +1,6 @@
 # NumLock Calculator
 
-NumLock Calculator is a small Windows tray calculator. Press `NumLock` to show the calculator, type an expression immediately, and press `NumLock` again or the close button to hide it back to the tray.
+NumLock Calculator is a small Windows tray calculator. Press `NumLock` to show the calculator or focus its input after switching to another app. Type an expression immediately, and press `NumLock` while the calculator has focus or use the close button to hide it back to the tray.
 
 ## Features
 
@@ -50,4 +50,3 @@ This repository does not include the original legacy NumLock Calculator binary. 
 ## License
 
 MIT License. See [LICENSE](LICENSE).
-

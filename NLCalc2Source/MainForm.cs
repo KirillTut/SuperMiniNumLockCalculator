@@ -587,7 +587,13 @@ internal sealed class MainForm : Form
 
     private void OnNumLockPressed()
     {
-        if (_s.NumLockActivation) ToggleVisible();
+        if (_s.NumLockActivation)
+        {
+            if (Visible && WindowState != FormWindowState.Minimized && ContainsFocus)
+                HideWindow();
+            else
+                ShowWindow();
+        }
         if (_s.KeepNumLockOn) ScheduleNumLockRestore();
     }
 
