@@ -32,10 +32,13 @@ internal static class NativeMethods
     internal const uint VK_NUMLOCK     = 0x90;
     internal const uint LLKHF_INJECTED = 0x10;
 
+    [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr hWnd);
 
     // ── Inject keystrokes ─────────────────────────────────────────────────────
+    [DllImport("user32.dll")] internal static extern short GetAsyncKeyState(int vKey);
     [DllImport("user32.dll")] internal static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, nuint extra);
+    internal const byte VK_MENU = 0x12;
     internal const uint KEYEVENTF_KEYUP = 2;
 
     [StructLayout(LayoutKind.Sequential)]

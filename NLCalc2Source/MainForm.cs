@@ -589,10 +589,11 @@ internal sealed class MainForm : Form
     {
         if (_s.NumLockActivation)
         {
-            if (Visible && WindowState != FormWindowState.Minimized && ContainsFocus)
+            if (Visible && WindowState != FormWindowState.Minimized &&
+                NativeMethods.GetForegroundWindow() == Handle)
                 HideWindow();
             else
-                ShowWindow();
+                ShowWindow(fromNumLock: true);
         }
         if (_s.KeepNumLockOn) ScheduleNumLockRestore();
     }
@@ -628,19 +629,32 @@ internal sealed class MainForm : Form
         else ShowWindow();
     }
 
-    private void ShowWindow()
+    private void ShowWindow() => ShowWindow(fromNumLock: false);
+
+    private void ShowWindow(bool fromNumLock)
     {
+        ActiveControl = _cbInput;
         Show();
         WindowState = FormWindowState.Normal;
         BringToFront();
-        NativeMethods.SetForegroundWindow(Handle);
-        Activate();
-        ActiveControl = _cbInput;
-        _cbInput.Select();
+        if (!NativeMethods.SetForegroundWindow(Handle) && fromNumLock)
+            RetryNumLockActivation();
         _cbInput.Focus();
         if (_hasResult)
             PreferResultContinuation();
         if (_s.KeepNumLockOn) ScheduleNumLockRestore();
+    }
+
+    private void RetryNumLockActivation()
+    {
+        if ((NativeMethods.GetAsyncKeyState(NativeMethods.VK_MENU) & 0x8000) != 0)
+            return;
+
+        // The keyboard hook observes NumLock without receiving foreground permission.
+        // An Alt press releases the foreground lock for this explicit show request.
+        NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, 0, 0);
+        try { NativeMethods.SetForegroundWindow(Handle); }
+        finally { NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, NativeMethods.KEYEVENTF_KEYUP, 0); }
     }
 
     private void HideWindow() => Hide();
